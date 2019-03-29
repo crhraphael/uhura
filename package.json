@@ -1,0 +1,16 @@
+{
+  "name": "uhura",
+  "version": "1.0.0",
+  "description": "Aplicaçao para importaçao e tratamento de traduçoes",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "argv-parser": "^0.1.4",
+    "axios": "^0.18.0",
+    "yargs": "^13.2.2"
+  }
+}
