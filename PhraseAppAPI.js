@@ -2,9 +2,9 @@ var axios = require('axios');
 var envJS = require('./env');
 
 module.exports = class PhraseAppAPI {
-    constructor(repositoryId) {
+    constructor() {
         this.endpoint = 'https://api.phraseapp.com/api/v2';
-        this.repositoryId = repositoryId;
+        this.repositoryId = envJS.PHRASEAPP_REPO_ID;
     }
     /**
      * Retorna os locales salvos no PhraseApp.
@@ -19,7 +19,7 @@ module.exports = class PhraseAppAPI {
                     access_token: envJS.PHRASEAPP_TOKEN,
                 }
             })            
-            resp = locales;
+            resp = locales.data;
         } catch (err) {
             console.log('erro ao baixar locales' + err);
             resp = { err };
@@ -56,7 +56,7 @@ module.exports = class PhraseAppAPI {
         }
     }
 
-    getTrans(tagList, localeId) {
+    async getTrans(tagList, localeId) {
         var resp = [];
         try {
             var trans = await axios.get(this.endpoint + '/projects/' + this.repositoryId + '/keys', {

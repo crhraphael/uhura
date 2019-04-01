@@ -7,10 +7,17 @@ var argv = require('yargs')
     .default('c', '.uhura.js')    
     .describe('c', 'Set the config file path')
     .demandOption(['c'])
+
     .alias('f', 'flow')
     .default('f', 'default')
     .nargs('f', 1)
     .describe('f', 'Select the config file flow to run')
+
+    .alias('l', 'locales')
+    .default('l', '*')
+    .nargs('l', 1)
+    .describe('l', 'String of locales to process separated by comma')
+
     .help('h')
     .alias('h', 'help')
     .epilog('Developed by Adriano Vianna, Fernando Barbosa, Crhistian Raphael and Rodolpho Guerreiro!')

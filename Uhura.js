@@ -7,7 +7,7 @@ const fs = require('fs')
 //fp.allFilesSync('./i18n')
 
 module.exports = class Uhura {
-    constructor(configFile, flow) {
+    constructor(configFile, flow, locales) {
         /**
          * Valida se o arquivo de configuração existe.
          */
@@ -41,7 +41,12 @@ module.exports = class Uhura {
         /**
          * Api para download de traduções.
          */
-        this.api = new PhraseAppAPI(env.PHRASEAPP_REPO_ID);
+        this.api = new PhraseAppAPI();
+
+        /**
+         * Locales que serão processados pelo Uhura.
+         */
+        this.localesToProcess = locales;
 
         /**
          * Chaves necessárias para o funcionamento da lógica.
@@ -79,7 +84,13 @@ module.exports = class Uhura {
             // Baixando locales...
             let apiLocales = await this.api.getLocales();
             if(apiLocales.err) throw err;
-             
+
+            // Filtro de locale por linha de comando
+            apiLocales = apiLocales.filter((locale) => {
+                return this.localesToProcess === '*' || this.localesToProcess === locale.code
+            })
+            
+
             // Baixando traduções por locales.    
             let translations = [];            
             for(let i = apiLocales.length - 1; i >= 0; i--) {
@@ -89,6 +100,7 @@ module.exports = class Uhura {
                 
                 translations[currLocale.code] = currTrans;
             }
+
 
             //Baixando traduções por locale/tag.
             //let trans = await this.api.getLocaleTranslation(locale.id, 'nested_json', true, 'Affiliate-tag')
@@ -106,17 +118,16 @@ module.exports = class Uhura {
             }
 
             // Ler e processar arquivos de tradução de acordo com as regras do cliente.
-            for(let i = locales.length - 1; i >= 0; i--) {
+            for(let i = apiLocales.length - 1; i >= 0; i--) {
                 /**
                  * Locale atual.
                  */
-                let currLocale = locales[i];
-
+                let currLocale = apiLocales[i];
 
                 /**
                  * Array de chaves do locale atual.
                  */
-                let translationKeys = Object.keys(translations[currLocale]);
+                let translationKeys = Object.keys(translations[currLocale.code]);
                 for(let j = translationKeys.length - 1; j >= 0; j--) {
                     /**
                      * Chave atual sendo iterada.
@@ -125,11 +136,12 @@ module.exports = class Uhura {
                     /**
                      * Conteúdo da chave sendo iterada.
                      */
-                    let currTransData = translations[currLocale][currTransKey];
+                    let currTransData = translations[currLocale.code][currTransKey];
 
-                    const path = this.constructPath();
                     // Montar filepath
-    
+                    console.log(currTransData)
+                }
+                return currTransData;
                     // 
                     filepathBase = '/ProjectTranslations/';
     
@@ -148,7 +160,7 @@ module.exports = class Uhura {
                         }
                     }
                     // Comparar chaves (apenas simple_json)? 
-                }
+                
             } 
         } catch(err) {
             console.log(err)
@@ -216,6 +228,7 @@ module.exports = class Uhura {
     getVariableFromPlaceHolder(placeholder) {
         const sanitizedPlaceholder = placeholder.replace('{', '').replace('}', '')
         let variable = undefined;
+        let type = undefined;
 
         // TODO: Verificar se podemos ter o mesmo nome de variável em tipos diferentes.
         const variableTypes = Object.keys(this.pathVariables)
