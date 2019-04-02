@@ -62,7 +62,10 @@ module.exports = class Uhura {
 
         this.pathStructure = this.config.flows[this.flow].path.structure;
         this.pathVariables = this.config.flows[this.flow].path.variables;
-        console.log(this.getPathPlaceholders());
+
+        this.fileConfig = this.config.flows[this.flow].file;
+        this.keysConfig = this.config.flows[this.flow].keys;
+
         /**
          * Função declarada no arquivo .uhura.js pelo cliente 
          * chamada para filtrar chaves da aplicação, se necessário.
@@ -105,25 +108,34 @@ module.exports = class Uhura {
             //Baixando traduções por locale/tag.
             //let trans = await this.api.getLocaleTranslation(locale.id, 'nested_json', true, 'Affiliate-tag')
 
+            // Variaveis de placeholder...
             let placeholders = this.getPathPlaceholders();
+            let variableData = [];
             for(let i = placeholders.length - 1; i >= 0; i--) {
                 const currPlaceholder = placeholders[i];
                 const variable = this.getVariableFromPlaceHolder(currPlaceholder);
 
-                if(variable.type === 'external') {
+                // variable.value = apiLocales.map((locale) => {
+                //     return locale.code
+                // })
 
-                } else {
+                variableData.push(variable)
 
-                }
+                // if(variable.type === 'external') {
+                //     this.pathStructure = this.pathStructure.replace(`/(\{${variable}})/g`, )
+                // } else {
+
+                // }
             }
 
-            // Ler e processar arquivos de tradução de acordo com as regras do cliente.
+            // Trim keys...
+            let fixedTranslationsCollection = [];
             for(let i = apiLocales.length - 1; i >= 0; i--) {
                 /**
                  * Locale atual.
                  */
                 let currLocale = apiLocales[i];
-
+                fixedTranslationsCollection[currLocale.code] = [];
                 /**
                  * Array de chaves do locale atual.
                  */
@@ -133,35 +145,76 @@ module.exports = class Uhura {
                      * Chave atual sendo iterada.
                      */
                     let currTransKey = translationKeys[j];
-                    /**
-                     * Conteúdo da chave sendo iterada.
-                     */
-                    let currTransData = translations[currLocale.code][currTransKey];
-
-                    // Montar filepath
-                    console.log(currTransData)
+                    
+                    if(this.keysConfig.filter(currTransKey)) {
+                        currTransKey = currTransKey.trim();
+                        currTransKey = this.keysConfig.rename(currTransKey);
+                        /**
+                         * Conteúdo da chave sendo iterada.
+                         */
+                        let currTransData = translations[currLocale.code][translationKeys[j]];
+                        fixedTranslationsCollection[currLocale.code][currTransKey] = currTransData;
+                    }
                 }
-                return currTransData;
-                    // 
-                    filepathBase = '/ProjectTranslations/';
-    
-                    filepathStructure = 'i18n/{LOCALE}/translations.js';
-                    filepath = 'language/{LOCALE}/default.php';
-                    filepath = 'translations/messages.{LOCALE}.php';
-                    // filepath = '/ProjectTranslations/{MODULE}/lang/{DIR}/messages.{LOCALE}.php';
-                    try {
-                        fileBuffer = fs.readFileSync(filepath)
-                    } catch(err) {
-                        if (err.code === 'ENOENT') {
-                            console.log('File not found!');
-                            return false;
-                        } else {
-                            throw err;
+            } 
+            
+            // Loop de atualização de conteúdo.
+            variableData = variableData[0];
+            for(let i = apiLocales.length - 1; i >= 0; i--) {
+                let currLocale = apiLocales[i];
+                if(variableData.data.rename) {
+                    currLocale.code = variableData.data.rename(currLocale.code);
+                }
+
+                try {
+                    let filepath = this.pathStructure.replace('{'+ variableData.name + '}', currLocale.code)
+                    if(!fs.existsSync(filepath)) {
+                        console.log('arquivo base não encontrado.. pular step de validação para este locale?')
+                        continue;
+                    } else {
+                        let fileBuffer = fs.readFileSync(filepath)
+                        var storedContent = fileBuffer.toString()
+                        try {                            
+                            storedContent = JSON.parse(storedContent);
+                        } catch(err) {
+                            if(!this.fileConfig.hasOwnProperty('toJSON')) {
+                                throw new Error('o arquivo informado não foi tratado como json, tente implementar uma alteração no conteúdo do arquivo que torne-o um JSON válido através do hook file->toJSON')
+                            }
+                            storedContent = this.fileConfig.toJSON(storedContent);
+                        } 
+
+                        console.log(storedContent);
+                        storedContent = JSON.parse(storedContent, null, '\t');
+                        return;
+
+                        let keys = Object.keys(storedContent);
+                        for(let j = keys.length - 1; j >= 0; j--) {
+                            const currKey = keys[j];
+                            if(fixedTranslationsCollection[apiLocales[i].code].hasOwnProperty(currKey)) {
+                                console.log('possui a chave ' + currKey)
+                                if(fixedTranslationsCollection[apiLocales[i].code][currKey] === storedContent[currKey]) {
+                                    console.log('o valor é identico ')                                    
+                                } else {
+                                    console.log('o valor foi modificado')
+                                }
+                            } else {
+                                console.log('não possui a chave ' + currKey)
+                            }
                         }
                     }
-                    // Comparar chaves (apenas simple_json)? 
-                
-            } 
+
+
+                } catch(err) {
+                    if (err.code === 'ENOENT') {
+                        console.log('File not found!');
+                        return false;
+                    } else {
+                        throw err;
+                    }
+                }
+            }
+            
+            // Comparar chaves (apenas simple_json)? 
         } catch(err) {
             console.log(err)
         } finally {
@@ -227,19 +280,21 @@ module.exports = class Uhura {
      */
     getVariableFromPlaceHolder(placeholder) {
         const sanitizedPlaceholder = placeholder.replace('{', '').replace('}', '')
-        let variable = undefined;
+        let data = undefined;
         let type = undefined;
+        let name = undefined;
 
         // TODO: Verificar se podemos ter o mesmo nome de variável em tipos diferentes.
         const variableTypes = Object.keys(this.pathVariables)
         for(let i = variableTypes.length - 1; i >= 0; i--) {
             const currVariableType = variableTypes[i];
             if(this.pathVariables[currVariableType].hasOwnProperty(sanitizedPlaceholder)) {
-                variable = this.pathVariables[currVariableType][sanitizedPlaceholder]
-                type = currVariableType
+                data = this.pathVariables[currVariableType][sanitizedPlaceholder];
+                name = sanitizedPlaceholder;
+                type = currVariableType;
             }
         }
-        return { variable, type }
+        return { data, name, type }
     }
 
     getPathPlaceholders() {        
