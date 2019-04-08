@@ -1,5 +1,7 @@
 const PhraseAppAPI = require('./PhraseAppAPI');
 const fs = require('fs')
+const inquirer = require('inquirer');
+const chalk = require('chalk');
 
 module.exports = class Uhura {
     constructor(configFile, flow, locales) {
@@ -130,13 +132,14 @@ module.exports = class Uhura {
                 let currLocale = Object.create(apiLocales[i]);
                 treatedTransCollection[currLocale.code] = [];
 
-                let currTranslationCollection = Object.create(apiTranslations[currLocale.code]);
+                let currTranslationCollection = apiTranslations[currLocale.code];
 
                 /**
                  * Array de chaves do locale atual.
                  */
                 let translationKeys = Object.keys(currTranslationCollection);
                 translationKeys = translationKeys.filter(this.keysConfig.filter);
+
                 for(let j = translationKeys.length - 1; j >= 0; j--) {
                     /**
                      * Chave atual sendo iterada.
@@ -148,8 +151,7 @@ module.exports = class Uhura {
 
                     // Lógica do cliente para renomear chaves.
                     currTransKey = this.keysConfig.rename(currTransKey);
-
-                    treatedTransCollection[currLocale.code][currTransKey] = currTranslationCollection[currTransKey];
+                    treatedTransCollection[currLocale.code][currTransKey] = currTranslationCollection[translationKeys[j]];
                 }
             } 
             
@@ -239,6 +241,14 @@ module.exports = class Uhura {
             }
 
             // Comparação do novo arquivo de traduções com o atual.
+            /**
+             * Coleção de traduções com alterações filtradas pelo cliente.
+             */
+            let filteredTranslations = [];
+
+            let newKeys = [];
+            let modifiedKeys = [];
+            let updatedKeys = [];
             for(let i = apiLocales.length - 1; i >= 0; i--) {
                 /**
                  * Locale sendo iterado.
@@ -262,25 +272,58 @@ module.exports = class Uhura {
                      * Chave de tradução atual sendo iterada.
                      */
                     const currKey = keys[j];
-                    if(oldTranslations.hasOwnProperty(currKey)) {
-                        console.log('o arquivo de tradução possui a chave: ' + currKey)
-                        if(newTranslations[currKey] !== oldTranslations[currKey]) {
-                            console.log('o valor foi modificado')
-                            console.log(newTranslations[currKey])
-                            console.log(oldTranslations[currKey])
-                        } 
 
-                        console.log('o valor é identico ')
-                        continue;
-                    } else {
-                        console.log('não possui a chave ' + currKey)
+                    let currValue = oldTranslations[currKey];
+                    const newValue = newTranslations[currKey];
+
+                    if(!updatedKeys.includes(currKey)) {
+                            
+                        let answer = false;
+                        if(!oldTranslations.hasOwnProperty(currKey)) {
+                            console.log(`${chalk.green('Nova chave encontrada:')} ${chalk.yellow.bold(currKey)}`)
+
+                            answer = await inquirer.prompt([{
+                                type: 'confirm',
+                                name: 'newKey',
+                                message: chalk.red('Deseja importar esta nova chave? (Evite aceitar modificações desconhecidas)')
+                            }])                  
+                        } else {
+                            if(newTranslations[currKey] !== oldTranslations[currKey]) {
+                                console.log(`${chalk.green('A chave')} ${chalk.yellow.bold(currKey)} ${chalk.green('no idioma')} ${chalk.yellow.bold(currLocale.code)} ${chalk.green('foi alterada.')}`);
+                                console.log(`${chalk.white('Valor novo:')} ${chalk.cyan(newTranslations[currKey])}`)
+                                console.log(`${chalk.white('Valor atual:')} ${chalk.red(oldTranslations[currKey])}`)
+
+                                answer = await inquirer.prompt([{
+                                    type: 'confirm',
+                                    name: 'modifiedKey',
+                                    message: `${chalk.red('Deseja importar as alterações? (Evite aceitar modificações desconhecidas)')}`
+                                }])
+                            } 
+                        }
+
+                        if(answer.newKey) {
+                            newKeys.push(currKey)
+                        } else if(answer.modifiedKey) {
+                            modifiedKeys.push(currKey)
+                        }
+
+                        if(answer.newKey || answer.modifiedKey) {
+                            updatedKeys.push(currKey)
+                            currValue = newValue;
+                        }
+
                     }
+                    oldTranslations[currKey] = currValue;
                 }
+
+                console.log(oldTranslations)
             }
+
+
         } catch(err) {
             console.log(err)
         } finally {
-    
+            
         }
     }
 
